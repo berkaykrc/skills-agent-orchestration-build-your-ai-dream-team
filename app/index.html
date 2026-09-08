@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A contributor-friendly overview of current project health and activity.">
+    <title>Project Pulse</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="page-shell">
+        <p class="eyebrow">Delivery overview</p>
+        <h1>Project Pulse</h1>
+        <p class="page-intro">A clear view of what teams are shipping, where attention is needed, and what moved most recently.</p>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="project-section" aria-labelledby="projects-heading">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">Team portfolio</p>
+            <h2 id="projects-heading">Projects at a glance</h2>
+          </div>
+          <p id="project-count" class="project-count" aria-live="polite">Loading projects</p>
+        </div>
+
+        <p id="loading-state" class="state-message state-loading" role="status">Loading project data...</p>
+        <p id="empty-state" class="state-message state-empty" role="status" hidden>No projects are available right now.</p>
+        <p id="malformed-state" class="state-message state-error" role="alert" hidden>Project data could not be displayed because it does not match the expected format.</p>
+        <p id="failure-state" class="state-message state-error" role="alert" hidden>Project data could not be loaded. Please try again later.</p>
+
+        <div id="project-dashboard" class="dashboard" aria-busy="true"></div>
+      </section>
+    </main>
+
+    <script>
+      const DATA_URL = "project-data.json";
+      const dashboard = document.querySelector("#project-dashboard");
+      const projectCount = document.querySelector("#project-count");
+      const stateElements = {
+        loading: document.querySelector("#loading-state"),
+        empty: document.querySelector("#empty-state"),
+        malformed: document.querySelector("#malformed-state"),
+        failure: document.querySelector("#failure-state")
+      };
+      const requiredFields = ["name", "owner", "status", "recentActivity", "priority"];
+      const knownStatusValues = new Set(["active", "at-risk", "complete", "in-progress", "on-track", "paused", "planning"]);
+      const knownPriorityValues = new Set(["high", "medium", "low"]);
+
+      class MalformedDataError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = "MalformedDataError";
+        }
+      }
+
+      function normalizeValue(value) {
+        return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+      }
+
+      function showState(stateName) {
+        Object.entries(stateElements).forEach(([name, element]) => {
+          element.hidden = name !== stateName;
+        });
+        dashboard.hidden = stateName !== "ready";
+        dashboard.setAttribute("aria-busy", stateName === "loading" ? "true" : "false");
+      }
+
+      function validateProjectData(payload) {
+        if (!payload || typeof payload !== "object" || !Array.isArray(payload.projects)) {
+          throw new MalformedDataError("Expected a top-level projects array.");
+        }
+
+        payload.projects.forEach((project, index) => {
+          if (!project || typeof project !== "object" || Array.isArray(project)) {
+            throw new MalformedDataError(`Project ${index + 1} is not an object.`);
+          }
+
+          requiredFields.forEach((field) => {
+            if (typeof project[field] !== "string" || project[field].trim() === "") {
+              throw new MalformedDataError(`Project ${index + 1} is missing a valid ${field} value.`);
+            }
+          });
+
+          if (project.summary !== undefined && (typeof project.summary !== "string" || project.summary.trim() === "")) {
+            throw new MalformedDataError(`Project ${index + 1} has an invalid summary.`);
+          }
+        });
+
+        return payload.projects;
+      }
+
+      function createDetail(label, value) {
+        const detail = document.createElement("div");
+        detail.className = "detail-item";
+
+        const detailLabel = document.createElement("dt");
+        detailLabel.textContent = label;
+        const detailValue = document.createElement("dd");
+        detailValue.textContent = value;
+
+        detail.append(detailLabel, detailValue);
+        return detail;
+      }
+
+      function createBadgeDetail(label, value, valueType) {
+        const detail = document.createElement("div");
+        detail.className = "detail-item";
+
+        const detailLabel = document.createElement("dt");
+        detailLabel.textContent = label;
+        const detailValue = document.createElement("dd");
+        const normalizedValue = normalizeValue(value);
+        const knownValues = valueType === "status" ? knownStatusValues : knownPriorityValues;
+        const tone = knownValues.has(normalizedValue) ? normalizedValue : "unknown";
+        const badge = document.createElement("span");
+        badge.className = `badge ${valueType}-${tone}`;
+        badge.textContent = value;
+        detailValue.appendChild(badge);
+
+        detail.append(detailLabel, detailValue);
+        return detail;
+      }
+
+      function createProjectCard(project) {
+        const card = document.createElement("article");
+        card.className = "project-card";
+
+        const cardHeader = document.createElement("header");
+        cardHeader.className = "card-header";
+        const title = document.createElement("h3");
+        title.textContent = project.name;
+        const priorityBadge = document.createElement("span");
+        const normalizedPriority = normalizeValue(project.priority);
+        const priorityTone = knownPriorityValues.has(normalizedPriority) ? normalizedPriority : "unknown";
+        priorityBadge.className = `badge priority-${priorityTone}`;
+        priorityBadge.textContent = `Priority: ${project.priority}`;
+        cardHeader.append(title, priorityBadge);
+
+        card.appendChild(cardHeader);
+
+        if (project.summary) {
+          const summary = document.createElement("p");
+          summary.className = "card-summary";
+          summary.textContent = project.summary;
+          card.appendChild(summary);
+        }
+
+        const details = document.createElement("dl");
+        details.className = "project-details";
+        details.append(
+          createDetail("Owner", project.owner),
+          createBadgeDetail("Status", project.status, "status"),
+          createDetail("Recent activity", project.recentActivity),
+          createBadgeDetail("Priority", project.priority, "priority")
+        );
+        card.appendChild(details);
+
+        return card;
+      }
+
+      function renderProjects(projects) {
+        dashboard.replaceChildren();
+        projects.forEach((project) => {
+          dashboard.appendChild(createProjectCard(project));
+        });
+        projectCount.textContent = `${projects.length} ${projects.length === 1 ? "project" : "projects"}`;
+        showState("ready");
+      }
+
+      async function loadProjects() {
+        showState("loading");
+        projectCount.textContent = "Loading projects";
+
+        let response;
+        try {
+          response = await fetch(DATA_URL, {
+            headers: { Accept: "application/json" }
+          });
+        } catch (error) {
+          showState("failure");
+          projectCount.textContent = "Projects unavailable";
+          return;
+        }
+
+        if (!response.ok) {
+          showState("failure");
+          projectCount.textContent = "Projects unavailable";
+          return;
+        }
+
+        let payload;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          showState("malformed");
+          projectCount.textContent = "Invalid project data";
+          return;
+        }
+
+        let projects;
+        try {
+          projects = validateProjectData(payload);
+        } catch (error) {
+          if (error instanceof MalformedDataError) {
+            showState("malformed");
+            projectCount.textContent = "Invalid project data";
+            return;
+          }
+          throw error;
+        }
+
+        if (projects.length === 0) {
+          dashboard.replaceChildren();
+          projectCount.textContent = "0 projects";
+          showState("empty");
+          return;
+        }
+
+        renderProjects(projects);
+      }
+
+      loadProjects();
+    </script>
+  </body>
+</html>

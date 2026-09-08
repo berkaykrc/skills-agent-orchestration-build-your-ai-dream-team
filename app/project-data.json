@@ -1,0 +1,36 @@
+{
+  "projects": [
+    {
+      "name": "Atlas Mobile Refresh",
+      "owner": "Nina Patel",
+      "status": "In progress",
+      "recentActivity": "Design QA signed off on the new onboarding flow.",
+      "priority": "High",
+      "summary": "Refreshing the mobile onboarding experience to make the first session faster and clearer."
+    },
+    {
+      "name": "Signal Insights",
+      "owner": "Liam Chen",
+      "status": "At risk",
+      "recentActivity": "The analytics event audit found three legacy events to migrate.",
+      "priority": "Medium",
+      "summary": "Consolidating product signals into a dependable insights workspace for customer teams."
+    },
+    {
+      "name": "Harbor API Reliability",
+      "owner": "Sofia Alvarez",
+      "status": "Active",
+      "recentActivity": "The first load-test run cleared the new latency target.",
+      "priority": "High",
+      "summary": "Improving service resilience with clearer operational metrics and safer release controls."
+    },
+    {
+      "name": "Greenroom Docs",
+      "owner": "Marcus Lee",
+      "status": "Planning",
+      "recentActivity": "Contributor interviews are scheduled for the next planning session.",
+      "priority": "Low",
+      "summary": "Creating a welcoming documentation hub that helps contributors find their first task."
+    }
+  ]
+}
